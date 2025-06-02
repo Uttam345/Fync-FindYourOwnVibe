@@ -16,7 +16,6 @@ import SharedMemories from './components/SharedMemories';
 import CreateMemory from './components/CreateMemory';
 import ViewUserProfile from './components/ViewUserProfile';
 import { AuthService } from './services/authService';
-import { DataService } from './services/dataService';
 import LoadingSpinner from './components/LoadingSpinner';
 import SimpleDebug from './components/SimpleDebug';
 
@@ -64,11 +63,6 @@ const App = () => {
   const checkAuthStatus = async () => {
     try {
       console.log('🔄 Checking authentication status...');
-      
-      // Initialize sample data on first run
-      console.log('📊 Initializing app data...');
-      await DataService.initializeApp();
-      console.log('✅ App data initialized');
       
       console.log('👤 Getting current user...');
       const { data } = await AuthService.getCurrentUser();
