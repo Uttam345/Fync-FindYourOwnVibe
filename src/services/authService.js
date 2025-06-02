@@ -85,8 +85,8 @@ export class AuthService {
       const { data: { user }, error } = await supabase.auth.getUser()
       
       if (error) {
-        console.log('❌ AuthService: Error getting user:', error.message);
-        throw error;
+        console.log('ℹ️ AuthService: No active session');
+        return { data: null, error: null };
       }
       
       if (user) {
