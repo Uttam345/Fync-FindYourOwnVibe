@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, X, MapPin, Music, Sparkles, Zap } from 'lucide-react';
-import { motion, AnimatePresence, PanInfo } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ConnectionService } from '../services/connectionService';
 import { AuthService } from '../services/authService';
 

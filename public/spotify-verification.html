@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spotify Settings Verification</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .highlight { background: yellow; font-weight: bold; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .code { background: #f0f0f0; padding: 10px; border-radius: 5px; font-family: monospace; margin: 10px 0; }
+        .section { border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🎵 Spotify App Settings Verification</h1>
+    
+    <div class="section">
+        <h3>What you SHOULD have in your Spotify app:</h3>
+        <div><strong>App Name:</strong> FYNC</div>
+        <div><strong>Website:</strong> <span class="highlight">https://localhost:5174</span></div>
+        <div><strong>Redirect URI:</strong> <span class="highlight">https://localhost:5174/auth/spotify/callback</span></div>
+        <div><strong>Client ID:</strong> <span class="highlight">423d596237724235a4fbbed742318be8</span></div>
+    </div>
+
+    <div class="section">
+        <h3>Common Mistakes to Check:</h3>
+        <ul>
+            <li>❌ <code>http://</code> instead of <code>https://</code></li>
+            <li>❌ <code>localhost:5173</code> instead of <code>localhost:5174</code></li>
+            <li>❌ Extra trailing slash: <code>/auth/spotify/callback/</code></li>
+            <li>❌ Wrong capitalization: <code>/Auth/Spotify/Callback</code></li>
+            <li>❌ Missing parts: <code>https://localhost:5174/callback</code></li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h3>Copy-Paste Ready Values:</h3>
+        <p><strong>Website URL:</strong></p>
+        <div class="code">https://localhost:5174</div>
+        
+        <p><strong>Redirect URI:</strong></p>
+        <div class="code">https://localhost:5174/auth/spotify/callback</div>
+    </div>
+
+    <div class="section">
+        <h3>Current Detection:</h3>
+        <div><strong>Your current URL:</strong> <span id="currentUrl"></span></div>
+        <div><strong>Your current protocol:</strong> <span id="protocol"></span></div>
+        <div><strong>Your current host:</strong> <span id="host"></span></div>
+        <div><strong>Expected redirect would be:</strong> <span id="expectedRedirect"></span></div>
+    </div>
+
+    <div class="section">
+        <h3>Verification Links:</h3>
+        <a href="https://developer.spotify.com/dashboard" target="_blank" style="display: inline-block; background: #1db954; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin: 5px;">
+            🎵 Open Spotify Dashboard
+        </a>
+        <a href="https://localhost:5174/oauth-test.html" target="_blank" style="display: inline-block; background: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin: 5px;">
+            🧪 Test OAuth Flow
+        </a>
+    </div>
+
+    <script>
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('protocol').textContent = window.location.protocol;
+        document.getElementById('host').textContent = window.location.host;
+        document.getElementById('expectedRedirect').textContent = window.location.origin + '/auth/spotify/callback';
+        
+        // Check if we're on the right URL
+        if (window.location.protocol === 'https:' && window.location.host === 'localhost:5174') {
+            document.getElementById('currentUrl').className = 'success';
+            document.getElementById('protocol').className = 'success';
+            document.getElementById('host').className = 'success';
+        } else {
+            document.getElementById('currentUrl').className = 'error';
+            if (window.location.protocol !== 'https:') {
+                document.getElementById('protocol').className = 'error';
+            }
+            if (window.location.host !== 'localhost:5174') {
+                document.getElementById('host').className = 'error';
+            }
+        }
+    </script>
+</body>
+</html>

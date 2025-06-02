@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify OAuth Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            max-width: 800px; 
+            margin: 0 auto; 
+        }
+        .test-item { 
+            background: #f5f5f5; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+        }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        .warning { background: #fff3cd; }
+        .code { 
+            background: #e9ecef; 
+            padding: 5px; 
+            border-radius: 3px; 
+            font-family: monospace; 
+            margin: 5px 0;
+            word-break: break-all;
+        }
+        button { 
+            background: #1db954; 
+            color: white; 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 5px;
+        }
+        button:hover { background: #1ed760; }
+    </style>
+</head>
+<body>
+    <h1>🎵 Spotify OAuth Test</h1>
+    
+    <div class="test-item">
+        <h3>Current Environment</h3>
+        <div><strong>Current URL:</strong> <span id="currentUrl"></span></div>
+        <div><strong>Protocol:</strong> <span id="protocol"></span></div>
+        <div><strong>Host:</strong> <span id="host"></span></div>
+    </div>
+
+    <div class="test-item">
+        <h3>Environment Variables (from .env)</h3>
+        <div><strong>Client ID:</strong> <span id="clientId"></span></div>
+        <div><strong>Redirect URI:</strong> <span id="redirectUri"></span></div>
+    </div>
+
+    <div class="test-item">
+        <h3>Manual OAuth URL Test</h3>
+        <div>We'll construct the OAuth URL manually to verify it's correct:</div>
+        <div class="code" id="manualOAuthUrl"></div>
+        <button onclick="testManualOAuth()">🔗 Test Manual OAuth URL</button>
+    </div>
+
+    <div class="test-item">
+        <h3>Spotify App Settings Verification</h3>
+        <p>Your Spotify app should have:</p>
+        <ul>
+            <li><strong>Redirect URI:</strong> <code>https://localhost:5174/auth/spotify/callback</code></li>
+            <li><strong>Client ID:</strong> <code>423d596237724235a4fbbed742318be8</code></li>
+        </ul>
+        <a href="https://developer.spotify.com/dashboard" target="_blank">
+            <button>🎵 Open Spotify Dashboard</button>
+        </a>
+    </div>
+
+    <div class="test-item">
+        <h3>Test Results</h3>
+        <div id="testResults"></div>
+    </div>
+
+    <script>
+        // Display current environment
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('protocol').textContent = window.location.protocol;
+        document.getElementById('host').textContent = window.location.host;
+
+        // Try to get environment variables (these won't work in static HTML, but good to check)
+        const clientId = '423d596237724235a4fbbed742318be8';
+        const redirectUri = 'https://localhost:5174/auth/spotify/callback';
+        
+        document.getElementById('clientId').textContent = clientId;
+        document.getElementById('redirectUri').textContent = redirectUri;
+
+        // Generate manual OAuth URL
+        function generateManualOAuthUrl() {
+            const params = new URLSearchParams({
+                client_id: clientId,
+                response_type: 'code',
+                redirect_uri: redirectUri,
+                scope: 'user-read-private user-read-email user-top-read user-library-read user-follow-read playlist-read-private user-read-recently-played',
+                state: Math.random().toString(36).substring(2, 18),
+                show_dialog: 'true'
+            });
+
+            return `https://accounts.spotify.com/authorize?${params}`;
+        }
+
+        const manualUrl = generateManualOAuthUrl();
+        document.getElementById('manualOAuthUrl').textContent = manualUrl;
+
+        function testManualOAuth() {
+            const results = document.getElementById('testResults');
+            
+            // Check if we're on HTTPS
+            if (window.location.protocol !== 'https:') {
+                results.innerHTML = '<div class="error">❌ Not using HTTPS! Spotify requires HTTPS.</div>';
+                return;
+            }
+
+            // Check if redirect URI matches current host
+            if (!redirectUri.includes(window.location.host)) {
+                results.innerHTML = '<div class="warning">⚠️ Redirect URI host doesn\'t match current host!</div>';
+            }
+
+            results.innerHTML = '<div class="success">✅ Environment looks good! Redirecting to Spotify...</div>';
+            
+            // Redirect to Spotify OAuth
+            setTimeout(() => {
+                window.location.href = manualUrl;
+            }, 2000);
+        }
+
+        // Auto-check on load
+        window.onload = function() {
+            const results = document.getElementById('testResults');
+            let issues = [];
+
+            if (window.location.protocol !== 'https:') {
+                issues.push('❌ Not using HTTPS');
+            }
+
+            if (window.location.host !== 'localhost:5174') {
+                issues.push('⚠️ Not running on localhost:5174');
+            }
+
+            if (issues.length === 0) {
+                results.innerHTML = '<div class="success">✅ All checks passed! Ready to test OAuth.</div>';
+            } else {
+                results.innerHTML = '<div class="error">' + issues.join('<br>') + '</div>';
+            }
+        };
+    </script>
+</body>
+</html>

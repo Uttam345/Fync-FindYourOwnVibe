@@ -1,21 +1,28 @@
-import React, { useState } from 'react';
-import { Music, Camera, Sparkles, Heart, Users, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Music, Camera, Sparkles, Heart, Users, ArrowRight, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SpotifyService } from '../services/spotifyService';
+import { ImageUploadService } from '../services/imageUploadService';
 
 // Onboarding Process Component
-const OnboardingProcess = ({ onComplete }) => {
+const OnboardingProcess = ({ onComplete, spotifyData }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [userData, setUserData] = useState({
+  const [validationErrors, setValidationErrors] = useState({
+    email: '',
+    password: ''
+  });  const [userData, setUserData] = useState({
     name: '',
     email: '',
     password: '',
     bio: '',
-    profileImage: '/api/placeholder/150/150',
+    profileImage: null, // Will store the URL after upload
+    profileImageFile: null, // Will store the selected file
     favoriteGenres: [],
     favoriteArtists: [],
     spotifyConnected: false,
+    spotifyData: null,
   });
   
   const genres = [
@@ -23,18 +30,77 @@ const OnboardingProcess = ({ onComplete }) => {
     'Electronic', 'Jazz', 'Classical', 'Alternative', 
     'Metal', 'Indie', 'Folk', 'Blues'
   ];
-  
-  const handleSpotifyConnect = () => {
-    // In a real app, this would initiate OAuth flow
-    setUserData({
-      ...userData,
-      spotifyConnected: true,
-      favoriteGenres: ['Alternative', 'Indie', 'Rock'],
-    });
-    setStep(3);
+    const handleSpotifyConnect = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      // Check if we're returning from Spotify OAuth
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const state = urlParams.get('state');
+      const error = urlParams.get('error');
+      
+      if (error) {
+        throw new Error('Spotify authorization failed: ' + error);
+      }
+      
+      if (code && state) {
+        // Handle OAuth callback
+        const result = await SpotifyService.handleCallback(code, state);
+        
+        if (result.error) {
+          throw result.error;
+        }
+        
+        // Update user data with Spotify information
+        setUserData({
+          ...userData,
+          spotifyConnected: true,
+          spotifyData: result.data,
+          favoriteGenres: SpotifyService.extractGenres(result.data.topArtists || []),
+          favoriteArtists: result.data.topArtists?.slice(0, 10).map(artist => artist.name) || [],
+        });
+        
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setStep(3);
+      } else {
+        // Initiate OAuth flow
+        SpotifyService.initiateAuth();
+      }
+    } catch (err) {
+      console.error('Spotify connection failed:', err);
+      setError('Failed to connect to Spotify. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
-  
-  const toggleGenre = (genre) => {
+    // Check for Spotify OAuth callback on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    
+    if (code && state && step === 2) {
+      handleSpotifyConnect();
+    }
+  }, [step]);
+
+  // Handle incoming Spotify data from callback
+  useEffect(() => {
+    if (spotifyData && !userData.spotifyConnected) {
+      setUserData({
+        ...userData,
+        spotifyConnected: true,
+        spotifyData: spotifyData,
+        favoriteGenres: SpotifyService.extractGenres(spotifyData.topArtists || []),
+        favoriteArtists: spotifyData.topArtists?.slice(0, 10).map(artist => artist.name) || [],
+      });
+      setStep(3);
+    }
+  }, [spotifyData]);
+    const toggleGenre = (genre) => {
     if (userData.favoriteGenres.includes(genre)) {
       setUserData({
         ...userData,
@@ -44,27 +110,109 @@ const OnboardingProcess = ({ onComplete }) => {
       setUserData({
         ...userData,
         favoriteGenres: [...userData.favoriteGenres, genre]
-      });    }
+      });
+    }
   };
-  
+
   const handleComplete = async () => {
     setLoading(true);
     setError('');
     
     try {
+      // Ensure at least one genre is selected
+      if (userData.favoriteGenres.length === 0) {
+        setError('Please select at least one favorite genre');
+        setLoading(false);
+        return;
+      }
+
       const result = await onComplete(userData);
-      if (!result.success) {
-        setError(result.error || 'Registration failed. Please try again.');
+      if (!result || !result.success) {
+        setError(result?.error || 'Registration failed. Please try again.');
         setLoading(false);
       }
+      // If successful, onComplete should handle navigation
     } catch (err) {
+      console.error('Onboarding completion failed:', err);
       setError('Registration failed. Please try again.');
+      setLoading(false);
+    }
+  };  const handleProfileImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      setError('');
+
+      // Store the file for later upload during signup
+      setUserData({
+        ...userData,
+        profileImageFile: file,
+        profileImage: URL.createObjectURL(file) // For preview
+      });
+
+    } catch (err) {
+      console.error('Error selecting image:', err);
+      setError(err.message || 'Failed to select image');
+    } finally {
       setLoading(false);
     }
   };
 
+  // Email validation function
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      return 'Email is required';
+    }
+    if (!emailRegex.test(email)) {
+      return 'Please enter a valid email address';
+    }
+    return '';
+  };
+
+  // Password validation function
+  const validatePassword = (password) => {
+    if (!password) {
+      return 'Password is required';
+    }
+    if (password.length !== 8) {
+      return 'Password must be exactly 8 characters long';
+    }
+    return '';
+  };
+
+  // Handle email change with validation
+  const handleEmailChange = (e) => {
+    const email = e.target.value;
+    setUserData({...userData, email});
+    setValidationErrors({
+      ...validationErrors,
+      email: validateEmail(email)
+    });
+  };
+
+  // Handle password change with validation
+  const handlePasswordChange = (e) => {
+    const password = e.target.value;
+    setUserData({...userData, password});
+    setValidationErrors({
+      ...validationErrors,
+      password: validatePassword(password)
+    });
+  };
+
+  // Check if step 1 form is valid
+  const isStep1Valid = () => {
+    return userData.name.trim() && 
+           userData.email.trim() && 
+           userData.password.trim() &&
+           !validationErrors.email && 
+           !validationErrors.password;
+  };
   return (
-    <div className="min-h-screen gradient-bg p-4 relative overflow-hidden">
+    <div className="min-h-screen gradient-bg p-4 relative">
       {/* Floating Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div 
@@ -98,9 +246,9 @@ const OnboardingProcess = ({ onComplete }) => {
           transition={{ duration: 0.6, delay: 0.2 }}
         >
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl mb-4 pulse-glow">
-            {step === 1 && <Users className="w-8 h-8 text-white" />}
-            {step === 2 && <Music className="w-8 h-8 text-white" />}
-            {step === 3 && <Sparkles className="w-8 h-8 text-white" />}
+            {step === 1 && <Users className="w-8 h-8 text-black" />}
+            {step === 2 && <Music className="w-8 h-8 text-black" />}
+            {step === 3 && <Sparkles className="w-8 h-8 text-black" />}
           </div>
           
           <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-purple-100 bg-clip-text text-transparent mb-2">
@@ -113,8 +261,7 @@ const OnboardingProcess = ({ onComplete }) => {
             {step === 2 && "Let's discover your musical taste"}
             {step === 3 && "Finish setting up your profile"}
           </p>
-          
-          {/* Progress Indicator */}
+            {/* Progress Indicator */}
           <div className="flex justify-center mt-6">
             <div className="flex space-x-3">
               {[1, 2, 3].map((s) => (
@@ -132,6 +279,18 @@ const OnboardingProcess = ({ onComplete }) => {
               ))}
             </div>
           </div>
+          
+          {/* Error Display */}
+          {error && (
+            <motion.div 
+              className="mt-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-200 text-sm text-center"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              {error}
+            </motion.div>
+          )}
         </motion.div>
         
         <AnimatePresence mode="wait">
@@ -150,20 +309,26 @@ const OnboardingProcess = ({ onComplete }) => {
                   type="text"
                   value={userData.name}
                   onChange={(e) => setUserData({...userData, name: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
                   placeholder="Your full name"
                 />
               </div>
-              
-              <div>
+                <div>
                 <label className="block text-white/90 mb-2 font-medium">Email</label>
                 <input
                   type="email"
                   value={userData.email}
-                  onChange={(e) => setUserData({...userData, email: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                  onChange={handleEmailChange}
+                  className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
+                    validationErrors.email 
+                      ? 'border-red-400 focus:ring-red-400' 
+                      : 'border-white/20 focus:ring-purple-400'
+                  }`}
                   placeholder="you@example.com"
                 />
+                {validationErrors.email && (
+                  <p className="mt-1 text-red-300 text-sm">{validationErrors.email}</p>
+                )}
               </div>
               
               <div>
@@ -171,16 +336,24 @@ const OnboardingProcess = ({ onComplete }) => {
                 <input
                   type="password"
                   value={userData.password}
-                  onChange={(e) => setUserData({...userData, password: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
-                  placeholder="Create a secure password"
+                  onChange={handlePasswordChange}
+                  className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
+                    validationErrors.password 
+                      ? 'border-red-400 focus:ring-red-400' 
+                      : 'border-white/20 focus:ring-purple-400'
+                  }`}
+                  placeholder="Must be exactly 8 characters"
+                  maxLength={8}
                 />
+                {validationErrors.password && (
+                  <p className="mt-1 text-red-300 text-sm">{validationErrors.password}</p>
+                )}
+                <p className="mt-1 text-white/60 text-xs">Password must be exactly 8 characters long</p>
               </div>
-              
-              <motion.button 
+                <motion.button 
                 onClick={() => setStep(2)}
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!userData.name || !userData.email || !userData.password}
+                disabled={!isStep1Valid()}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -197,20 +370,55 @@ const OnboardingProcess = ({ onComplete }) => {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50 }}
               transition={{ duration: 0.5 }}
-            >
-              <div className="text-center">
-                <p className="text-white/80 mb-6 leading-relaxed">Connect your music account to find fans with similar taste and get personalized recommendations</p>
+            >              <div className="text-center">
+                <p className="text-gray-500 mb-6 leading-relaxed">Connect your music account to find fans with similar taste and get personalized recommendations</p>
                 
-                <motion.button 
-                  onClick={handleSpotifyConnect}
-                  className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3 mb-4"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Music size={24} />
-                  Connect with Spotify
-                  <div className="w-2 h-2 bg-white/30 rounded-full animate-pulse"></div>
-                </motion.button>
+                {userData.spotifyConnected ? (
+                  <motion.div 
+                    className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-semibold shadow-lg mb-4 flex items-center justify-center gap-3"
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Music size={24} />
+                    Connected to Spotify ✓
+                    <div className="w-2 h-2 bg-white/50 rounded-full"></div>
+                  </motion.div>
+                ) : (
+                  <motion.button 
+                    onClick={handleSpotifyConnect}
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3 mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    whileHover={{ scale: loading ? 1 : 1.02 }}
+                    whileTap={{ scale: loading ? 1 : 0.98 }}
+                  >
+                    <Music size={24} />
+                    {loading ? 'Connecting...' : 'Connect with Spotify'}
+                    <div className={`w-2 h-2 bg-white/30 rounded-full ${loading ? 'animate-spin' : 'animate-pulse'}`}></div>
+                  </motion.button>
+                )}
+                
+                {userData.spotifyConnected && userData.spotifyData && (
+                  <motion.div 
+                    className="mb-4 p-4 bg-white/10 rounded-xl backdrop-blur-sm"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                  >
+                    <h3 className="text-white font-semibold mb-2">Your Music Taste</h3>
+                    <p className="text-white/70 text-sm mb-2">Found {userData.favoriteArtists.length} favorite artists</p>
+                    <div className="flex flex-wrap gap-2">
+                      {userData.favoriteGenres.slice(0, 4).map((genre, index) => (
+                        <span 
+                          key={index}
+                          className="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-sm font-medium"
+                        >
+                          {genre}
+                        </span>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
                 
                 <div className="my-6 flex items-center">
                   <div className="flex-1 h-px bg-white/20"></div>
@@ -224,7 +432,7 @@ const OnboardingProcess = ({ onComplete }) => {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  Skip and select genres manually
+                  {userData.spotifyConnected ? 'Continue' : 'Skip and select genres manually'}
                   <ArrowRight size={18} />
                 </motion.button>
               </div>
@@ -271,26 +479,43 @@ const OnboardingProcess = ({ onComplete }) => {
                 <textarea
                   value={userData.bio}
                   onChange={(e) => setUserData({...userData, bio: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm resize-none"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm resize-none"
                   rows={3}
                   placeholder="Tell other fans about yourself, your favorite artists, concerts you've been to..."
                 />
-              </div>
-              
-              <div className="text-center">
+              </div>              <div className="text-center">
                 <div className="relative inline-block">
                   <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-3 border-4 border-white/30 bg-white/10 backdrop-blur-sm">
-                    <img src={userData.profileImage} alt="Profile" className="w-full h-full object-cover" />
+                    {userData.profileImage ? (
+                      <img src={userData.profileImage} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white/40">
+                        <Users size={32} />
+                      </div>
+                    )}
                   </div>
-                  <motion.button 
-                    className="absolute bottom-2 right-0 w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white shadow-lg"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleProfileImageUpload}
+                    className="hidden"
+                    id="profile-image-upload"
+                    disabled={loading}
+                  />
+                  <motion.label
+                    htmlFor="profile-image-upload"
+                    className={`absolute bottom-2 right-0 w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white shadow-lg cursor-pointer ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                    whileHover={{ scale: loading ? 1 : 1.1 }}
+                    whileTap={{ scale: loading ? 1 : 0.9 }}
                   >
-                    <Camera size={16} />
-                  </motion.button>
+                    {loading ? <Upload size={16} className="animate-spin" /> : <Camera size={16} />}
+                  </motion.label>
                 </div>
-                <p className="text-white/60 text-sm">Upload your profile photo</p>
+                <p className="text-white/60 text-sm">
+                  {userData.profileImageFile ? 'Image selected! Will upload during registration.' : 'Upload your profile photo'}
+                </p>
               </div>
               
               <motion.button 

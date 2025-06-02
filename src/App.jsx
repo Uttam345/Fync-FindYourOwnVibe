@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserCircle, Calendar, MessageSquare, Compass, Settings, Music, LogOut, Heart, X, MapPin, Bell, Users } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import OnboardingProcess from './components/OnboardingProcess';
+import SpotifyCallback from './components/SpotifyCallback';
 import MainAppLayout from './components/MainAppLayout';
 import DiscoverTab from './components/DiscoverTab';
 import EventsTab from './components/EventsTab';
@@ -18,13 +19,12 @@ import ViewUserProfile from './components/ViewUserProfile';
 import { AuthService } from './services/authService';
 import { DataService } from './services/dataService';
 import LoadingSpinner from './components/LoadingSpinner';
-import SimpleDebug from './components/SimpleDebug';
+import SupabaseTestComponent from './components/SupabaseTestComponent';
+
 
 
 // Main App Component
 const App = () => {
-  console.log('🚀 App: Component mounting/rendering');
-  
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(true);
   const [user, setUser] = useState(null);
@@ -33,10 +33,29 @@ const App = () => {
   const [currentView, setCurrentView] = useState('discover');
   const [currentParams, setCurrentParams] = useState({});
   const [loading, setLoading] = useState(true);
+  const [spotifyCallbackData, setSpotifyCallbackData] = useState(null);
+
+  // Check for Spotify OAuth callback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+    
+    if ((code && state) || error) {
+      // This is a Spotify OAuth callback
+      setCurrentView('spotify-callback');
+      return;
+    }
+    
+    checkAuthStatus();
+  }, []);
 
   // Check authentication status on mount
   useEffect(() => {
-    checkAuthStatus();
+    if (currentView !== 'spotify-callback') {
+      checkAuthStatus();
+    }
     
     // Listen for auth state changes
     const { data: { subscription } } = AuthService.onAuthStateChange(async (event, session) => {
@@ -63,33 +82,25 @@ const App = () => {
 
   const checkAuthStatus = async () => {
     try {
-      console.log('🔄 Checking authentication status...');
-      
       // Initialize sample data on first run
-      console.log('📊 Initializing app data...');
       await DataService.initializeApp();
-      console.log('✅ App data initialized');
       
-      console.log('👤 Getting current user...');
       const { data } = await AuthService.getCurrentUser();
       
       if (data) {
-        console.log('✅ User authenticated:', data.user?.email);
         setUser(data.user);
         setProfile(data.profile);
         setIsAuthenticated(true);
         setIsFirstTimeUser(false);
         setCurrentView('discover');
       } else {
-        console.log('❌ No authenticated user, showing login');
         setCurrentView('login');
       }
     } catch (error) {
-      console.error('❌ Auth check failed:', error);
+      console.error('Auth check failed:', error);
       setCurrentView('login');
     } finally {
       setLoading(false);
-      console.log('✅ Auth check completed');
     }
   };
 
@@ -133,6 +144,8 @@ const App = () => {
   const completeOnboarding = async (userData) => {
     try {
       setLoading(true);
+      console.log('Starting onboarding completion with data:', userData);
+      
       const { data, error } = await AuthService.signUp(
         userData.email, 
         userData.password, 
@@ -140,22 +153,46 @@ const App = () => {
       );
       
       if (error) {
+        console.error('Signup error:', error);
         throw error;
       }
+
+      if (!data || !data.user) {
+        throw new Error('User creation failed - no user data returned');
+      }
+
+      console.log('Signup successful, setting up user session...');
       
-      // Note: User will need to verify email before being fully authenticated
-      // For demo purposes, we'll simulate login
+      // Set up the user session
       setUser(data.user);
-      setProfile(userData);
+      setProfile(data.profile || userData); // Use the created profile or fallback to userData
       setIsAuthenticated(true);
       setIsFirstTimeUser(false);
       setCurrentView('discover');
+      
+      console.log('Onboarding completed successfully!');
       return { success: true };
     } catch (error) {
       console.error('Onboarding failed:', error);
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.message || 'Registration failed. Please try again.' 
+      };
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle Spotify callback completion
+  const handleSpotifyCallbackComplete = (spotifyData) => {
+    setSpotifyCallbackData(spotifyData);
+    
+    if (isAuthenticated) {
+      // User is already authenticated, go back to profile or onboarding
+      setCurrentView(isFirstTimeUser ? 'onboarding' : 'profile');
+    } else {
+      // User is in onboarding flow, go back to onboarding
+      setCurrentView('onboarding');
     }
   };
 
@@ -169,28 +206,27 @@ const App = () => {
 
   // Render the current view based on authentication state
   const renderCurrentView = () => {
-    console.log('🔍 App: renderCurrentView called', {
-      loading,
-      isAuthenticated,
-      currentView,
-      user: user?.email,
-      profile: profile?.name
-    });
+    // Handle Spotify OAuth callback
+    if (currentView === 'spotify-callback') {
+      return (
+        <SpotifyCallback 
+          onComplete={handleSpotifyCallbackComplete}
+          userId={user?.id}
+        />
+      );
+    }
 
     if (loading) {
-      console.log('📊 App: Showing loading spinner');
       return <LoadingSpinner />;
     }
 
     if (!isAuthenticated) {
-      console.log('🔒 App: User not authenticated, showing login/onboarding');
       if (isFirstTimeUser && currentView === 'onboarding') {
-        return <OnboardingProcess onComplete={completeOnboarding} />;
+        return <OnboardingProcess onComplete={completeOnboarding} spotifyData={spotifyCallbackData} />;
       }
       return <LoginScreen onLogin={handleLogin} onNavigate={navigate} />;
     }
 
-    console.log('✅ App: User authenticated, showing main app');
     // Protected routes
     return (
       <MainAppLayout 
@@ -219,8 +255,13 @@ const App = () => {
 
   return (
     <div className="h-screen flex flex-col gradient-bg">
+      {/* Add debug component for testing - can be toggled by adding ?debug=true to URL */}
+      {new URLSearchParams(window.location.search).get('debug') === 'true' && (
+        <div className="fixed top-0 left-0 w-full z-50 bg-black bg-opacity-80 p-4">
+          <SupabaseTestComponent />
+        </div>
+      )}
       {renderCurrentView()}
-      <SimpleDebug />
     </div>
   );
 };

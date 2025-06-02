@@ -8,14 +8,23 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const handleSubmit = async (e) => {
+  const [validationErrors, setValidationErrors] = useState({
+    email: '',
+    password: ''
+  });
+    const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
-    // Simple validation
-    if (!email || !password) {
-      setError('Please fill in all fields');
+    // Validate email and password
+    const emailError = validateEmail(email);
+    const passwordError = validatePassword(password);
+    
+    if (emailError || passwordError) {
+      setValidationErrors({
+        email: emailError,
+        password: passwordError
+      });
       return;
     }
     
@@ -31,8 +40,59 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
   const handleSignUpClick = () => {
     onNavigate('onboarding');
   };
+
+  // Email validation function
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      return 'Email is required';
+    }
+    if (!emailRegex.test(email)) {
+      return 'Please enter a valid email address';
+    }
+    return '';
+  };
+
+  // Password validation function
+  const validatePassword = (password) => {
+    if (!password) {
+      return 'Password is required';
+    }
+    if (password.length !== 8) {
+      return 'Password must be exactly 8 characters long';
+    }
+    return '';
+  };
+
+  // Handle email change with validation
+  const handleEmailChange = (e) => {
+    const emailValue = e.target.value;
+    setEmail(emailValue);
+    setValidationErrors({
+      ...validationErrors,
+      email: validateEmail(emailValue)
+    });
+  };
+
+  // Handle password change with validation
+  const handlePasswordChange = (e) => {
+    const passwordValue = e.target.value;
+    setPassword(passwordValue);
+    setValidationErrors({
+      ...validationErrors,
+      password: validatePassword(passwordValue)
+    });
+  };
+
+  // Check if form is valid
+  const isFormValid = () => {
+    return email.trim() && 
+           password.trim() && 
+           !validationErrors.email && 
+           !validationErrors.password;
+  };
     return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 gradient-bg relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 gradient-bg relative">
       {/* Floating Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div 
@@ -114,16 +174,22 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-        >
-          <div>
+        >          <div>
             <label className="block text-white/90 mb-2 font-medium">Email</label>
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+              onChange={handleEmailChange}
+              className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
+                validationErrors.email 
+                  ? 'border-red-400 focus:ring-red-400' 
+                  : 'border-white/20 focus:ring-purple-400'
+              }`}
               placeholder="you@example.com"
             />
+            {validationErrors.email && (
+              <p className="mt-1 text-red-300 text-sm">{validationErrors.email}</p>
+            )}
           </div>
           
           <div>
@@ -131,17 +197,25 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
             <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
-              placeholder="••••••••"
+              onChange={handlePasswordChange}
+              className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
+                validationErrors.password 
+                  ? 'border-red-400 focus:ring-red-400' 
+                  : 'border-white/20 focus:ring-purple-400'
+              }`}
+              placeholder="Must be exactly 8 characters"
+              maxLength={8}
             />
-          </div>
-            <motion.button 
+            {validationErrors.password && (
+              <p className="mt-1 text-red-300 text-sm">{validationErrors.password}</p>
+            )}
+            <p className="mt-1 text-white/60 text-xs">Password must be exactly 8 characters long</p>
+          </div>            <motion.button 
             type="submit"
-            disabled={loading}
+            disabled={loading || !isFormValid()}
             className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
-            whileHover={{ scale: loading ? 1 : 1.02 }}
-            whileTap={{ scale: loading ? 1 : 0.98 }}
+            whileHover={{ scale: loading || !isFormValid() ? 1 : 1.02 }}
+            whileTap={{ scale: loading || !isFormValid() ? 1 : 0.98 }}
           >
             {loading ? 'Logging in...' : 'Log In'}
           </motion.button>
@@ -155,7 +229,7 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
         >          Don't have an account?{' '}
           <button 
             onClick={handleSignUpClick} 
-            className="text-white font-semibold hover:text-purple-200 transition-colors"
+            className="text-white font-semibold rounded-2xl hover:text-purple-200 transition-colors"
           >
             Sign Up
           </button>
