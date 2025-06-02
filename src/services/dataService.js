@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase'
 // Sample data for FYNC
 export const sampleEvents = [
   {
-    id: '1',
     title: 'Summer Music Festival 2025',
     description: 'The biggest music festival of the year featuring top artists from around the world.',
     image: '/api/placeholder/400/300',
@@ -16,7 +15,6 @@ export const sampleEvents = [
     attendees_count: 2500
   },
   {
-    id: '2',
     title: 'Electronic Beats Night',
     description: 'An unforgettable night of electronic music and dancing.',
     image: '/api/placeholder/400/300',
@@ -29,7 +27,6 @@ export const sampleEvents = [
     attendees_count: 800
   },
   {
-    id: '3',
     title: 'Acoustic Sessions',
     description: 'Intimate acoustic performances by rising indie artists.',
     image: '/api/placeholder/400/300',
@@ -42,7 +39,6 @@ export const sampleEvents = [
     attendees_count: 150
   },
   {
-    id: '4',
     title: 'Rock Revival',
     description: 'Classic rock meets modern edge in this high-energy concert.',
     image: '/api/placeholder/400/300',
