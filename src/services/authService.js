@@ -1,7 +1,8 @@
 import { supabase } from '../lib/supabase'
 import { ImageUploadService } from './imageUploadService'
 
-export class AuthService {  // Sign up new user
+export class AuthService {  
+  // Sign up new user
   static async signUp(email, password, userData) {
     try {
       console.log('Starting signup process for:', email);
@@ -57,7 +58,7 @@ export class AuthService {  // Sign up new user
           bio: userData.bio || '',
           favorite_genres: userData.favoriteGenres || [],
           favorite_artists: userData.favoriteArtists || [],
-          profile_image: profileImageUrl, // Store the uploaded image URL
+          profile_image: profileImageUrl,
           spotify_connected: userData.spotifyConnected || false,
           spotify_data: userData.spotifyData || null
         };
@@ -70,7 +71,6 @@ export class AuthService {  // Sign up new user
 
         if (profileError) {
           console.error('Profile creation error:', profileError);
-          // If it's an RLS error, provide helpful message
           if (profileError.code === '42501') {
             throw new Error('Database permission error. Please ensure RLS policies are set up correctly.');
           }
@@ -128,14 +128,16 @@ export class AuthService {  // Sign up new user
     } catch (error) {
       return { error }
     }
-  }  // Get current user
+  }
+
+  // Get current user
   static async getCurrentUser() {
     try {
       const { data: { user }, error } = await supabase.auth.getUser()
       
       if (error) {
-        console.log('❌ AuthService: Error getting user:', error.message);
-        throw error;
+        // Don't throw error for missing session, just return null data
+        return { data: null, error }
       }
       
       if (user) {
@@ -149,13 +151,13 @@ export class AuthService {  // Sign up new user
         }
       }
       
-      console.log('ℹ️ AuthService: No user currently authenticated');
       return { data: null, error: null }
     } catch (error) {
-      console.error('❌ AuthService: getCurrentUser failed:', error);
       return { data: null, error }
     }
-  }  // Get user profile
+  }
+
+  // Get user profile
   static async getUserProfile(userId) {
     try {
       const { data, error } = await supabase
@@ -165,18 +167,19 @@ export class AuthService {  // Sign up new user
         .single()
 
       if (error) {
+        // Handle case where profile doesn't exist
         if (error.code === 'PGRST116') {
-          // Profile table might not exist or user has no profile
+          return { data: null, error: null }
         }
         throw error;
       }
       
       return { data, error: null }
     } catch (error) {
-      console.error('❌ AuthService: getUserProfile failed:', error);
       return { data: null, error }
     }
   }
+
   // Update user profile
   static async updateProfile(userId, updates) {
     try {
