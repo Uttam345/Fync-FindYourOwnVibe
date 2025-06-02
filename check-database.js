@@ -1,9 +1,6 @@
 // Check database schema and policies
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://jizhqdurtsajadtjmfny.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppemhxZHVydHNhamFkdGptZm55Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3NDMyOTQsImV4cCI6MjA2MzMxOTI5NH0.Bvp7GBHbOXri_sDd4OuxgPJhpy5Lxt5tA01PCqkj9lM';
-
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 async function checkDatabase() {
