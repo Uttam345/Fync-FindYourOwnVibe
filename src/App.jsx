@@ -20,8 +20,6 @@ import { AuthService } from './services/authService';
 import LoadingSpinner from './components/LoadingSpinner';
 import SupabaseTestComponent from './components/SupabaseTestComponent';
 
-
-
 // Main App Component
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -82,11 +80,6 @@ const App = () => {
   const checkAuthStatus = async () => {
     try {
       console.log('🔄 Checking authentication status...');
-      
-      // Initialize sample data on first run
-      console.log('📊 Initializing app data...');
-      await DataService.initializeApp();
-      console.log('✅ App data initialized');
       
       const { data } = await AuthService.getCurrentUser();
       
