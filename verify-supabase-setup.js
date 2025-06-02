@@ -4,10 +4,6 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase configuration
-const supabaseUrl = 'https://ogspltrjsqigbikwzmgr.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9nc3BsdHJqc3FpZ2Jpa3d6bWdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzIwOTQzMTUsImV4cCI6MjA0NzY3MDMxNX0.CXKJ_6lqLGiTZkkqEKMGpqLxfn0H_uJ3jqEgGxrNa0I';
-
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function verifySupabaseSetup() {
