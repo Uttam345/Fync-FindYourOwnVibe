@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase'
 // Sample data for FYNC
 export const sampleEvents = [
   {
-    id: '1',
     title: 'Summer Music Festival 2025',
     description: 'The biggest music festival of the year featuring top artists from around the world.',
     image: '/api/placeholder/400/300',
@@ -16,7 +15,6 @@ export const sampleEvents = [
     attendees_count: 2500
   },
   {
-    id: '2',
     title: 'Electronic Beats Night',
     description: 'An unforgettable night of electronic music and dancing.',
     image: '/api/placeholder/400/300',
@@ -29,7 +27,6 @@ export const sampleEvents = [
     attendees_count: 800
   },
   {
-    id: '3',
     title: 'Acoustic Sessions',
     description: 'Intimate acoustic performances by rising indie artists.',
     image: '/api/placeholder/400/300',
@@ -42,7 +39,6 @@ export const sampleEvents = [
     attendees_count: 150
   },
   {
-    id: '4',
     title: 'Rock Revival',
     description: 'Classic rock meets modern edge in this high-energy concert.',
     image: '/api/placeholder/400/300',
@@ -124,55 +120,3 @@ export const sampleMemories = [
     likes_count: 22
   }
 ];
-
-// Database initialization functions
-export class DataService {
-  // Initialize sample events
-  static async initializeEvents() {
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .insert(sampleEvents);
-      
-      if (error) throw error;
-      return { success: true, data };
-    } catch (error) {
-      console.error('Error initializing events:', error);
-      return { success: false, error };
-    }
-  }
-
-  // Check if app has sample data
-  static async hasSampleData() {
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('id')
-        .limit(1);
-      
-      if (error) throw error;
-      return data && data.length > 0;
-    } catch (error) {
-      console.error('Error checking sample data:', error);
-      return false;
-    }
-  }
-
-  // Initialize app with sample data if needed
-  static async initializeApp() {
-    try {
-      const hasData = await this.hasSampleData();
-      
-      if (!hasData) {
-        console.log('Initializing app with sample data...');
-        await this.initializeEvents();
-        console.log('Sample data initialized successfully');
-      }
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Error initializing app:', error);
-      return { success: false, error };
-    }
-  }
-}

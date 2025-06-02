@@ -134,6 +134,7 @@ export class AuthService {  // Sign up new user
       const { data: { user }, error } = await supabase.auth.getUser()
       
       if (error) {
+        console.log('❌ AuthService: Error getting user:', error.message);
         throw error;
       }
       

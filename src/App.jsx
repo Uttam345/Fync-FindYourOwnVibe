@@ -17,7 +17,6 @@ import SharedMemories from './components/SharedMemories';
 import CreateMemory from './components/CreateMemory';
 import ViewUserProfile from './components/ViewUserProfile';
 import { AuthService } from './services/authService';
-import { DataService } from './services/dataService';
 import LoadingSpinner from './components/LoadingSpinner';
 import SupabaseTestComponent from './components/SupabaseTestComponent';
 
@@ -82,8 +81,12 @@ const App = () => {
 
   const checkAuthStatus = async () => {
     try {
+      console.log('🔄 Checking authentication status...');
+      
       // Initialize sample data on first run
+      console.log('📊 Initializing app data...');
       await DataService.initializeApp();
+      console.log('✅ App data initialized');
       
       const { data } = await AuthService.getCurrentUser();
       
