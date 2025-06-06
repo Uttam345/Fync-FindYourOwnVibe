@@ -1,24 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Music, Camera, Sparkles, Heart, Users, ArrowRight, Upload } from 'lucide-react';
+import { Music, Camera, Sparkles, Heart, Users, ArrowRight, Upload, User, AtSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SpotifyService } from '../services/spotifyService';
 import { ImageUploadService } from '../services/imageUploadService';
+import { AuthService } from '../services/authService';
 
-// Onboarding Process Component
+// Enhanced Onboarding Process Component with comprehensive profile creation
 const OnboardingProcess = ({ onComplete, spotifyData }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState({
     email: '',
-    password: ''
-  });  const [userData, setUserData] = useState({
+    password: '',
+    username: '',
+    name: ''
+  });
+  
+  const [userData, setUserData] = useState({
     name: '',
+    username: '',
     email: '',
     password: '',
     bio: '',
-    profileImage: null, // Will store the URL after upload
-    profileImageFile: null, // Will store the selected file
+    location: '',
+    profileImage: null,
+    profileImageFile: null,
     favoriteGenres: [],
     favoriteArtists: [],
     spotifyConnected: false,
@@ -30,12 +37,12 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
     'Electronic', 'Jazz', 'Classical', 'Alternative', 
     'Metal', 'Indie', 'Folk', 'Blues'
   ];
-    const handleSpotifyConnect = async () => {
+
+  const handleSpotifyConnect = async () => {
     try {
       setLoading(true);
       setError('');
       
-      // Check if we're returning from Spotify OAuth
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const state = urlParams.get('state');
@@ -46,14 +53,12 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
       }
       
       if (code && state) {
-        // Handle OAuth callback
         const result = await SpotifyService.handleCallback(code, state);
         
         if (result.error) {
           throw result.error;
         }
         
-        // Update user data with Spotify information
         setUserData({
           ...userData,
           spotifyConnected: true,
@@ -62,11 +67,9 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
           favoriteArtists: result.data.topArtists?.slice(0, 10).map(artist => artist.name) || [],
         });
         
-        // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);
         setStep(3);
       } else {
-        // Initiate OAuth flow
         SpotifyService.initiateAuth();
       }
     } catch (err) {
@@ -76,7 +79,7 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
       setLoading(false);
     }
   };
-    // Check for Spotify OAuth callback on component mount
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -87,7 +90,6 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
     }
   }, [step]);
 
-  // Handle incoming Spotify data from callback
   useEffect(() => {
     if (spotifyData && !userData.spotifyConnected) {
       setUserData({
@@ -100,7 +102,8 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
       setStep(3);
     }
   }, [spotifyData]);
-    const toggleGenre = (genre) => {
+
+  const toggleGenre = (genre) => {
     if (userData.favoriteGenres.includes(genre)) {
       setUserData({
         ...userData,
@@ -119,9 +122,14 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
     setError('');
     
     try {
-      // Ensure at least one genre is selected
       if (userData.favoriteGenres.length === 0) {
         setError('Please select at least one favorite genre');
+        setLoading(false);
+        return;
+      }
+
+      if (!userData.username) {
+        setError('Username is required');
         setLoading(false);
         return;
       }
@@ -131,13 +139,14 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
         setError(result?.error || 'Registration failed. Please try again.');
         setLoading(false);
       }
-      // If successful, onComplete should handle navigation
     } catch (err) {
       console.error('Onboarding completion failed:', err);
       setError('Registration failed. Please try again.');
       setLoading(false);
     }
-  };  const handleProfileImageUpload = async (event) => {
+  };
+
+  const handleProfileImageUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -145,11 +154,10 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
       setLoading(true);
       setError('');
 
-      // Store the file for later upload during signup
       setUserData({
         ...userData,
         profileImageFile: file,
-        profileImage: URL.createObjectURL(file) // For preview
+        profileImage: URL.createObjectURL(file)
       });
 
     } catch (err) {
@@ -160,57 +168,78 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
     }
   };
 
-  // Email validation function
+  // Validation functions
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email) {
-      return 'Email is required';
-    }
-    if (!emailRegex.test(email)) {
-      return 'Please enter a valid email address';
-    }
+    if (!email) return 'Email is required';
+    if (!emailRegex.test(email)) return 'Please enter a valid email address';
     return '';
   };
 
-  // Password validation function
   const validatePassword = (password) => {
-    if (!password) {
-      return 'Password is required';
-    }
-    if (password.length !== 8) {
-      return 'Password must be exactly 8 characters long';
-    }
+    if (!password) return 'Password is required';
+    if (password.length < 8) return 'Password must be at least 8 characters long';
     return '';
   };
 
-  // Handle email change with validation
-  const handleEmailChange = (e) => {
-    const email = e.target.value;
-    setUserData({...userData, email});
+  const validateUsername = async (username) => {
+    if (!username) return 'Username is required';
+    if (username.length < 3) return 'Username must be at least 3 characters long';
+    if (username.length > 30) return 'Username must be less than 30 characters';
+    if (!/^[A-Za-z0-9_]+$/.test(username)) return 'Username can only contain letters, numbers, and underscores';
+    
+    // Check availability
+    const { available } = await AuthService.checkUsernameAvailable(username);
+    if (!available) return 'This username is already taken';
+    
+    return '';
+  };
+
+  const validateName = (name) => {
+    if (!name) return 'Name is required';
+    if (name.length < 2) return 'Name must be at least 2 characters long';
+    return '';
+  };
+
+  // Handle input changes with validation
+  const handleInputChange = async (field, value) => {
+    setUserData({ ...userData, [field]: value });
+    
+    let error = '';
+    switch (field) {
+      case 'email':
+        error = validateEmail(value);
+        break;
+      case 'password':
+        error = validatePassword(value);
+        break;
+      case 'name':
+        error = validateName(value);
+        break;
+      case 'username':
+        if (value) {
+          error = await validateUsername(value);
+        }
+        break;
+    }
+    
     setValidationErrors({
       ...validationErrors,
-      email: validateEmail(email)
+      [field]: error
     });
   };
 
-  // Handle password change with validation
-  const handlePasswordChange = (e) => {
-    const password = e.target.value;
-    setUserData({...userData, password});
-    setValidationErrors({
-      ...validationErrors,
-      password: validatePassword(password)
-    });
-  };
-
-  // Check if step 1 form is valid
   const isStep1Valid = () => {
     return userData.name.trim() && 
+           userData.username.trim() && 
            userData.email.trim() && 
            userData.password.trim() &&
            !validationErrors.email && 
-           !validationErrors.password;
+           !validationErrors.password &&
+           !validationErrors.username &&
+           !validationErrors.name;
   };
+
   return (
     <div className="min-h-screen gradient-bg p-4 relative">
       {/* Floating Background Elements */}
@@ -256,12 +285,14 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
             {step === 2 && "Connect Your Music"}
             {step === 3 && "Complete Your Profile"}
           </h2>
-            <p className="text-white/80 text-sm">
+          
+          <p className="text-white/80 text-sm">
             {step === 1 && "Join the community of vibe seekers"}
             {step === 2 && "Let's discover your musical taste"}
             {step === 3 && "Finish setting up your profile"}
           </p>
-            {/* Progress Indicator */}
+          
+          {/* Progress Indicator */}
           <div className="flex justify-center mt-6">
             <div className="flex space-x-3">
               {[1, 2, 3].map((s) => (
@@ -304,25 +335,52 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
               transition={{ duration: 0.5 }}
             >
               <div>
-                <label className="block text-white/90 mb-2 font-medium">Full Name</label>
+                <label className="block text-white/90 mb-2 font-medium flex items-center">
+                  <User className="w-4 h-4 mr-2" />
+                  Full Name
+                </label>
                 <input
                   type="text"
                   value={userData.name}
-                  onChange={(e) => setUserData({...userData, name: e.target.value})}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
+                    validationErrors.name ? 'border-red-400 focus:ring-red-400' : 'border-white/20 focus:ring-purple-400'
+                  }`}
                   placeholder="Your full name"
                 />
+                {validationErrors.name && (
+                  <p className="mt-1 text-red-300 text-sm">{validationErrors.name}</p>
+                )}
               </div>
-                <div>
+
+              <div>
+                <label className="block text-white/90 mb-2 font-medium flex items-center">
+                  <AtSign className="w-4 h-4 mr-2" />
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={userData.username}
+                  onChange={(e) => handleInputChange('username', e.target.value)}
+                  className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
+                    validationErrors.username ? 'border-red-400 focus:ring-red-400' : 'border-white/20 focus:ring-purple-400'
+                  }`}
+                  placeholder="Choose a unique username"
+                />
+                {validationErrors.username && (
+                  <p className="mt-1 text-red-300 text-sm">{validationErrors.username}</p>
+                )}
+                <p className="mt-1 text-white/60 text-xs">3-30 characters, letters, numbers, and underscores only</p>
+              </div>
+              
+              <div>
                 <label className="block text-white/90 mb-2 font-medium">Email</label>
                 <input
                   type="email"
                   value={userData.email}
-                  onChange={handleEmailChange}
+                  onChange={(e) => handleInputChange('email', e.target.value)}
                   className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
-                    validationErrors.email 
-                      ? 'border-red-400 focus:ring-red-400' 
-                      : 'border-white/20 focus:ring-purple-400'
+                    validationErrors.email ? 'border-red-400 focus:ring-red-400' : 'border-white/20 focus:ring-purple-400'
                   }`}
                   placeholder="you@example.com"
                 />
@@ -336,21 +394,19 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
                 <input
                   type="password"
                   value={userData.password}
-                  onChange={handlePasswordChange}
+                  onChange={(e) => handleInputChange('password', e.target.value)}
                   className={`w-full px-4 py-3 bg-white/10 border rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 backdrop-blur-sm ${
-                    validationErrors.password 
-                      ? 'border-red-400 focus:ring-red-400' 
-                      : 'border-white/20 focus:ring-purple-400'
+                    validationErrors.password ? 'border-red-400 focus:ring-red-400' : 'border-white/20 focus:ring-purple-400'
                   }`}
-                  placeholder="Must be exactly 8 characters"
-                  maxLength={8}
+                  placeholder="Must be at least 8 characters"
                 />
                 {validationErrors.password && (
                   <p className="mt-1 text-red-300 text-sm">{validationErrors.password}</p>
                 )}
-                <p className="mt-1 text-white/60 text-xs">Password must be exactly 8 characters long</p>
+                <p className="mt-1 text-white/60 text-xs">Password must be at least 8 characters long</p>
               </div>
-                <motion.button 
+              
+              <motion.button 
                 onClick={() => setStep(2)}
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!isStep1Valid()}
@@ -370,7 +426,8 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50 }}
               transition={{ duration: 0.5 }}
-            >              <div className="text-center">
+            >
+              <div className="text-center">
                 <p className="text-gray-500 mb-6 leading-relaxed">Connect your music account to find fans with similar taste and get personalized recommendations</p>
                 
                 {userData.spotifyConnected ? (
@@ -483,7 +540,20 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
                   rows={3}
                   placeholder="Tell other fans about yourself, your favorite artists, concerts you've been to..."
                 />
-              </div>              <div className="text-center">
+              </div>
+
+              <div>
+                <label className="block text-white/90 mb-2 font-medium">Location (Optional)</label>
+                <input
+                  type="text"
+                  value={userData.location}
+                  onChange={(e) => setUserData({...userData, location: e.target.value})}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                  placeholder="City, State/Country"
+                />
+              </div>
+              
+              <div className="text-center">
                 <div className="relative inline-block">
                   <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-3 border-4 border-white/30 bg-white/10 backdrop-blur-sm">
                     {userData.profileImage ? (
@@ -521,11 +591,11 @@ const OnboardingProcess = ({ onComplete, spotifyData }) => {
               <motion.button 
                 onClick={handleComplete}
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={userData.favoriteGenres.length === 0}
+                disabled={userData.favoriteGenres.length === 0 || loading}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                Complete Setup <Heart size={18} />
+                {loading ? 'Creating Account...' : 'Complete Setup'} <Heart size={18} />
               </motion.button>
             </motion.div>
           )}
