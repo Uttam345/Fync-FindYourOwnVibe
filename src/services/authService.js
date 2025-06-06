@@ -25,70 +25,88 @@ export class AuthService {
         throw error;
       }
 
-      console.log('User created successfully:', data.user.id);
-
-      // Create profile record
-      if (data.user) {
-        console.log('Creating profile record...');
-        
-        let profileImageUrl = null;
-        
-        // Upload profile image if provided
-        if (userData.profileImageFile) {
-          console.log('Uploading profile image...');
-          const uploadResult = await ImageUploadService.uploadProfilePicture(
-            data.user.id, 
-            userData.profileImageFile
-          );
-          
-          if (uploadResult.success) {
-            profileImageUrl = uploadResult.url;
-            console.log('Profile image uploaded successfully:', profileImageUrl);
-          } else {
-            console.warn('Profile image upload failed:', uploadResult.error);
-            // Don't fail signup if image upload fails, just log it
-          }
-        }
-        
-        // Prepare profile data
-        const profileData = {
-          id: data.user.id,
-          email: data.user.email,
-          name: userData.name,
-          bio: userData.bio || '',
-          favorite_genres: userData.favoriteGenres || [],
-          favorite_artists: userData.favoriteArtists || [],
-          profile_image: profileImageUrl,
-          spotify_connected: userData.spotifyConnected || false,
-          spotify_data: userData.spotifyData || null
-        };
-
-        const { data: profileResult, error: profileError } = await supabase
-          .from('profiles')
-          .insert([profileData])
-          .select()
-          .single();
-
-        if (profileError) {
-          console.error('Profile creation error:', profileError);
-          if (profileError.code === '42501') {
-            throw new Error('Database permission error. Please ensure RLS policies are set up correctly.');
-          }
-          throw profileError;
-        }
-
-        console.log('Profile created successfully:', profileResult);
-        
-        return { 
-          data: {
-            user: data.user,
-            profile: profileResult
-          }, 
-          error: null 
-        };
+      if (!data.user) {
+        throw new Error('User creation failed - no user data returned');
       }
 
-      return { data, error: null }
+      console.log('User created successfully:', data.user.id);
+
+      // Wait a moment to ensure the auth session is fully established
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Verify user is authenticated before creating profile
+      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !currentUser) {
+        throw new Error('User authentication verification failed');
+      }
+
+      console.log('User authentication verified, creating profile...');
+      
+      let profileImageUrl = null;
+      
+      // Upload profile image if provided
+      if (userData.profileImageFile) {
+        console.log('Uploading profile image...');
+        const uploadResult = await ImageUploadService.uploadProfilePicture(
+          currentUser.id, 
+          userData.profileImageFile
+        );
+        
+        if (uploadResult.success) {
+          profileImageUrl = uploadResult.url;
+          console.log('Profile image uploaded successfully:', profileImageUrl);
+        } else {
+          console.warn('Profile image upload failed:', uploadResult.error);
+          // Don't fail signup if image upload fails, just log it
+        }
+      }
+      
+      // Prepare profile data
+      const profileData = {
+        id: currentUser.id,
+        email: currentUser.email,
+        name: userData.name,
+        bio: userData.bio || '',
+        favorite_genres: userData.favoriteGenres || [],
+        favorite_artists: userData.favoriteArtists || [],
+        profile_image: profileImageUrl,
+        spotify_connected: userData.spotifyConnected || false,
+        spotify_data: userData.spotifyData || null
+      };
+
+      console.log('Inserting profile data:', profileData);
+
+      const { data: profileResult, error: profileError } = await supabase
+        .from('profiles')
+        .insert([profileData])
+        .select()
+        .single();
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        
+        // Provide more specific error messages
+        if (profileError.code === '42501') {
+          throw new Error('Database permission error. Please ensure RLS policies are set up correctly by running the database migration.');
+        } else if (profileError.code === '23505') {
+          throw new Error('A profile with this email already exists.');
+        } else if (profileError.code === '23503') {
+          throw new Error('User authentication error. Please try again.');
+        }
+        
+        throw new Error(`Profile creation failed: ${profileError.message}`);
+      }
+
+      console.log('Profile created successfully:', profileResult);
+      
+      return { 
+        data: {
+          user: currentUser,
+          profile: profileResult
+        }, 
+        error: null 
+      };
     } catch (error) {
       console.error('SignUp failed:', error);
       return { data: null, error }
