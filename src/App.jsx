@@ -31,6 +31,7 @@ const App = () => {
   const [currentParams, setCurrentParams] = useState({});
   const [loading, setLoading] = useState(true);
   const [spotifyCallbackData, setSpotifyCallbackData] = useState(null);
+  const [emailConfirmationPending, setEmailConfirmationPending] = useState(false);
 
   // Check for Spotify OAuth callback
   useEffect(() => {
@@ -63,12 +64,14 @@ const App = () => {
           setProfile(userData.profile);
           setIsAuthenticated(true);
           setIsFirstTimeUser(false);
+          setEmailConfirmationPending(false);
           setCurrentView('discover');
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setProfile(null);
         setIsAuthenticated(false);
+        setEmailConfirmationPending(false);
         setCurrentView('login');
       }
       setLoading(false);
@@ -88,6 +91,7 @@ const App = () => {
         setProfile(data.profile);
         setIsAuthenticated(true);
         setIsFirstTimeUser(false);
+        setEmailConfirmationPending(false);
         setCurrentView('discover');
       } else {
         setCurrentView('login');
@@ -113,6 +117,7 @@ const App = () => {
       setUser(data.user);
       setProfile(data.profile);
       setIsAuthenticated(true);
+      setEmailConfirmationPending(false);
       setCurrentView('discover');
       return { success: true };
     } catch (error) {
@@ -130,6 +135,7 @@ const App = () => {
       setUser(null);
       setProfile(null);
       setIsAuthenticated(false);
+      setEmailConfirmationPending(false);
       setCurrentView('login');
     } catch (error) {
       console.error('Logout failed:', error);
@@ -157,6 +163,17 @@ const App = () => {
         throw new Error('User creation failed - no user data returned');
       }
 
+      // Check if email confirmation is required
+      if (data.emailConfirmationRequired) {
+        console.log('📧 Email confirmation required');
+        setEmailConfirmationPending(true);
+        setCurrentView('login');
+        return { 
+          success: true, 
+          message: 'Account created successfully! Please check your email and click the confirmation link before logging in.' 
+        };
+      }
+
       console.log('Signup successful, setting up user session...');
       
       // Set up the user session
@@ -164,6 +181,7 @@ const App = () => {
       setProfile(data.profile || userData); // Use the created profile or fallback to userData
       setIsAuthenticated(true);
       setIsFirstTimeUser(false);
+      setEmailConfirmationPending(false);
       setCurrentView('discover');
       
       console.log('Onboarding completed successfully!');
@@ -176,6 +194,17 @@ const App = () => {
       };
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle email confirmation resend
+  const handleResendConfirmation = async (email) => {
+    try {
+      const { error } = await AuthService.resendEmailConfirmation(email);
+      if (error) throw error;
+      return { success: true, message: 'Confirmation email sent! Please check your inbox.' };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   };
 
@@ -220,7 +249,14 @@ const App = () => {
       if (isFirstTimeUser && currentView === 'onboarding') {
         return <OnboardingProcess onComplete={completeOnboarding} spotifyData={spotifyCallbackData} />;
       }
-      return <LoginScreen onLogin={handleLogin} onNavigate={navigate} />;
+      return (
+        <LoginScreen 
+          onLogin={handleLogin} 
+          onNavigate={navigate}
+          emailConfirmationPending={emailConfirmationPending}
+          onResendConfirmation={handleResendConfirmation}
+        />
+      );
     }
 
     // Protected routes

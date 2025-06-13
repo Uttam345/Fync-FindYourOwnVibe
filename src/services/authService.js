@@ -35,6 +35,19 @@ export class AuthService {
 
       console.log('✅ User created successfully:', data.user.id);
 
+      // Check if email confirmation is required
+      if (!data.session && data.user && !data.user.email_confirmed_at) {
+        console.log('📧 Email confirmation required for user:', email);
+        return {
+          data: {
+            user: data.user,
+            profile: null,
+            emailConfirmationRequired: true
+          },
+          error: null
+        };
+      }
+
       // Wait for auth session to be established
       await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -121,7 +134,8 @@ export class AuthService {
       return { 
         data: {
           user: currentUser,
-          profile: profileResult
+          profile: profileResult,
+          emailConfirmationRequired: false
         }, 
         error: null 
       };
@@ -141,7 +155,29 @@ export class AuthService {
         password
       })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ SignIn error:', error);
+        
+        // Provide specific error messages based on error type
+        if (error.message === 'Invalid login credentials') {
+          // Check if user exists but email is not confirmed
+          const { data: userData } = await supabase.auth.admin.getUserById(email);
+          
+          throw new Error(
+            'Invalid login credentials. If you recently signed up, please check your email and click the confirmation link before logging in. If you forgot your password, use the reset password option.'
+          );
+        } else if (error.message.includes('Email not confirmed')) {
+          throw new Error(
+            'Please check your email and click the confirmation link before logging in.'
+          );
+        } else if (error.message.includes('Invalid email')) {
+          throw new Error('Please enter a valid email address.');
+        } else if (error.message.includes('Password')) {
+          throw new Error('Invalid password. Please check your password and try again.');
+        }
+        
+        throw error;
+      }
 
       console.log('✅ User signed in successfully');
 
@@ -341,6 +377,21 @@ export class AuthService {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`
+      })
+      
+      if (error) throw error
+      return { error: null }
+    } catch (error) {
+      return { error }
+    }
+  }
+
+  // Resend email confirmation
+  static async resendEmailConfirmation(email) {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email
       })
       
       if (error) throw error

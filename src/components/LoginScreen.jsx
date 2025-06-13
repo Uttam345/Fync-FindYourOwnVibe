@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Music, Heart, Sparkles, Users } from 'lucide-react';
+import { Music, Heart, Sparkles, Users, Mail, RefreshCw } from 'lucide-react';
 
 // Welcome Screen / Login Component
-const LoginScreen = ({ onLogin, onNavigate }) => {
+const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendConfirmation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
   const [validationErrors, setValidationErrors] = useState({
     email: '',
     password: ''
   });
-    const handleSubmit = async (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setResendMessage('');
     
     // Validate email and password
     const emailError = validateEmail(email);
@@ -39,6 +43,27 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
 
   const handleSignUpClick = () => {
     onNavigate('onboarding');
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      setError('Please enter your email address first');
+      return;
+    }
+    
+    setResendLoading(true);
+    setResendMessage('');
+    setError('');
+    
+    const result = await onResendConfirmation(email);
+    
+    if (result.success) {
+      setResendMessage(result.message);
+    } else {
+      setError(result.error);
+    }
+    
+    setResendLoading(false);
   };
 
   // Email validation function
@@ -91,7 +116,8 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
            !validationErrors.email && 
            !validationErrors.password;
   };
-    return (
+
+  return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 gradient-bg relative">
       {/* Floating Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
@@ -127,7 +153,8 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
         >
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl mb-4 pulse-glow">
             <Music className="w-8 h-8 text-white" />
-          </div>          <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-purple-100 bg-clip-text text-transparent">
+          </div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-purple-100 bg-clip-text text-transparent">
             FYNC
           </h1>
           <p className="text-white/80 mt-2 font-medium">Find Your Own Vibe - Connect with fans who share your music taste</p>
@@ -157,6 +184,42 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
             </motion.div>
           </div>
         </motion.div>
+
+        {/* Email confirmation pending message */}
+        {emailConfirmationPending && (
+          <motion.div 
+            className="bg-blue-500/20 border border-blue-400/30 text-blue-100 p-4 rounded-xl mb-4 backdrop-blur-sm"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+          >
+            <div className="flex items-center space-x-2 mb-2">
+              <Mail className="w-5 h-5" />
+              <span className="font-medium">Email Confirmation Required</span>
+            </div>
+            <p className="text-sm mb-3">
+              Please check your email and click the confirmation link before logging in.
+            </p>
+            <button
+              onClick={handleResendConfirmation}
+              disabled={resendLoading}
+              className="flex items-center space-x-1 text-blue-200 hover:text-white transition-colors text-sm"
+            >
+              <RefreshCw className={`w-4 h-4 ${resendLoading ? 'animate-spin' : ''}`} />
+              <span>{resendLoading ? 'Sending...' : 'Resend confirmation email'}</span>
+            </button>
+          </motion.div>
+        )}
+
+        {/* Success message */}
+        {resendMessage && (
+          <motion.div 
+            className="bg-green-500/20 border border-green-400/30 text-green-100 p-3 rounded-xl mb-4 backdrop-blur-sm"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+          >
+            {resendMessage}
+          </motion.div>
+        )}
         
         {error && (
           <motion.div 
@@ -174,7 +237,8 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
-        >          <div>
+        >
+          <div>
             <label className="block text-white/90 mb-2 font-medium">Email</label>
             <input
               type="email"
@@ -209,7 +273,9 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
               <p className="mt-1 text-red-300 text-sm">{validationErrors.password}</p>
             )}
             <p className="mt-1 text-white/60 text-xs">Password must be at least 8 characters long</p>
-          </div>            <motion.button 
+          </div>
+
+          <motion.button 
             type="submit"
             disabled={loading || !isFormValid()}
             className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -225,7 +291,8 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6 }}
-        >          Don't have an account?{' '}
+        >
+          Don't have an account?{' '}
           <button 
             onClick={handleSignUpClick} 
             className="text-white font-semibold rounded-2xl hover:text-purple-200 transition-colors"
