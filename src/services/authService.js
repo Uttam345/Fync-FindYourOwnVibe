@@ -160,9 +160,6 @@ export class AuthService {
         
         // Provide specific error messages based on error type
         if (error.message === 'Invalid login credentials') {
-          // Check if user exists but email is not confirmed
-          const { data: userData } = await supabase.auth.admin.getUserById(email);
-          
           throw new Error(
             'Invalid login credentials. If you recently signed up, please check your email and click the confirmation link before logging in. If you forgot your password, use the reset password option.'
           );
