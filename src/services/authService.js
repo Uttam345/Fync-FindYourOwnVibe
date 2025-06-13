@@ -2,10 +2,127 @@ import { supabase } from '../lib/supabase'
 import { ImageUploadService } from './imageUploadService'
 
 export class AuthService {  
+  // Check if the system is properly set up before attempting operations
+  static async checkSystemSetup() {
+    try {
+      console.log('🔍 Checking system setup...');
+      
+      // Test if profiles table exists and is accessible
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('count', { count: 'exact', head: true });
+      
+      if (error) {
+        console.error('❌ Database setup issue:', error);
+        if (error.code === '42P01') {
+          return { 
+            isSetup: false, 
+            error: 'DATABASE_NOT_SETUP',
+            message: 'Database tables are not set up. Please run the database setup script in your Supabase dashboard.' 
+          };
+        }
+        if (error.code === '42501') {
+          return { 
+            isSetup: false, 
+            error: 'RLS_NOT_CONFIGURED',
+            message: 'Database permissions are not configured. Please run the complete database setup script.' 
+          };
+        }
+        return { 
+          isSetup: false, 
+          error: 'DATABASE_ERROR',
+          message: `Database configuration error: ${error.message}` 
+        };
+      }
+      
+      // Test storage bucket
+      const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
+      const hasBucket = buckets?.find(b => b.id === 'profile-pictures');
+      
+      if (bucketError || !hasBucket) {
+        console.warn('⚠️ Storage bucket not found, but continuing...');
+      }
+      
+      console.log('✅ System setup verified');
+      return { isSetup: true, error: null };
+    } catch (error) {
+      console.error('❌ System setup check failed:', error);
+      return { 
+        isSetup: false, 
+        error: 'SETUP_CHECK_FAILED',
+        message: 'Unable to verify system setup. Please check your Subabase connection.' 
+      };
+    }
+  }
+
+  // Sign in existing user with setup verification
+  static async signIn(email, password) {
+    try {
+      console.log('🔄 Signing in user:', email);
+      
+      // First check if system is properly set up
+      const setupCheck = await this.checkSystemSetup();
+      if (!setupCheck.isSetup) {
+        throw new Error(`SETUP_REQUIRED: ${setupCheck.message}`);
+      }
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (error) {
+        console.error('❌ SignIn error:', error);
+        
+        // Provide specific error messages based on error type
+        if (error.message === 'Invalid login credentials') {
+          throw new Error(
+            'Invalid login credentials. This could mean: 1) The email/password is incorrect, 2) The user account doesn\'t exist (please sign up first), or 3) The email hasn\'t been confirmed yet (check your email for a confirmation link).'
+          );
+        } else if (error.message.includes('Email not confirmed')) {
+          throw new Error(
+            'Please check your email and click the confirmation link before logging in.'
+          );
+        } else if (error.message.includes('Invalid email')) {
+          throw new Error('Please enter a valid email address.');
+        } else if (error.message.includes('Password')) {
+          throw new Error('Invalid password. Please check your password and try again.');
+        }
+        
+        throw error;
+      }
+
+      console.log('✅ User signed in successfully');
+
+      // Get comprehensive user profile
+      const profile = await this.getUserProfile(data.user.id)
+      
+      // Log user session
+      await this.logUserSession(data.user.id);
+      
+      return { 
+        data: { 
+          user: data.user, 
+          profile: profile.data 
+        }, 
+        error: null 
+      }
+    } catch (error) {
+      console.error('❌ SignIn failed:', error);
+      return { data: null, error }
+    }
+  }
+
   // Sign up new user with comprehensive profile creation
   static async signUp(email, password, userData) {
     try {
       console.log('🔄 Starting comprehensive signup process for:', email);
+      
+      // Check system setup before attempting signup
+      const setupCheck = await this.checkSystemSetup();
+      if (!setupCheck.isSetup) {
+        throw new Error(`SETUP_REQUIRED: ${setupCheck.message}`);
+      }
       
       // Generate unique username if not provided
       const username = userData.username || this.generateUsername(userData.name, email);
@@ -141,58 +258,6 @@ export class AuthService {
       };
     } catch (error) {
       console.error('❌ SignUp failed:', error);
-      return { data: null, error }
-    }
-  }
-
-  // Sign in existing user
-  static async signIn(email, password) {
-    try {
-      console.log('🔄 Signing in user:', email);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      })
-
-      if (error) {
-        console.error('❌ SignIn error:', error);
-        
-        // Provide specific error messages based on error type
-        if (error.message === 'Invalid login credentials') {
-          throw new Error(
-            'Invalid login credentials. If you recently signed up, please check your email and click the confirmation link before logging in. If you forgot your password, use the reset password option.'
-          );
-        } else if (error.message.includes('Email not confirmed')) {
-          throw new Error(
-            'Please check your email and click the confirmation link before logging in.'
-          );
-        } else if (error.message.includes('Invalid email')) {
-          throw new Error('Please enter a valid email address.');
-        } else if (error.message.includes('Password')) {
-          throw new Error('Invalid password. Please check your password and try again.');
-        }
-        
-        throw error;
-      }
-
-      console.log('✅ User signed in successfully');
-
-      // Get comprehensive user profile
-      const profile = await this.getUserProfile(data.user.id)
-      
-      // Log user session
-      await this.logUserSession(data.user.id);
-      
-      return { 
-        data: { 
-          user: data.user, 
-          profile: profile.data 
-        }, 
-        error: null 
-      }
-    } catch (error) {
-      console.error('❌ SignIn failed:', error);
       return { data: null, error }
     }
   }
@@ -366,7 +431,7 @@ export class AuthService {
 
   // Listen to auth state changes
   static onAuthStateChange(callback) {
-    return supabase.auth.onAuthStateChange(callback)
+    return supabase.auth.onAuthStateChange(callback)  
   }
 
   // Reset password

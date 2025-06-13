@@ -104,13 +104,21 @@ const App = () => {
     }
   };
 
-  // Login handler
+  // Login handler with improved error handling
   const handleLogin = async (email, password) => {
     try {
       setLoading(true);
       const { data, error } = await AuthService.signIn(email, password);
       
       if (error) {
+        // Handle setup-related errors differently
+        if (error.message && error.message.includes('SETUP_REQUIRED')) {
+          return { 
+            success: false, 
+            error: error.message,
+            isSetupError: true 
+          };
+        }
         throw error;
       }
       
@@ -122,7 +130,11 @@ const App = () => {
       return { success: true };
     } catch (error) {
       console.error('Login failed:', error);
-      return { success: false, error: error.message };
+      return { 
+        success: false, 
+        error: error.message,
+        isSetupError: error.message && error.message.includes('SETUP_REQUIRED')
+      };
     } finally {
       setLoading(false);
     }
@@ -142,7 +154,7 @@ const App = () => {
     }
   };
 
-  // Complete onboarding
+  // Complete onboarding with better error handling
   const completeOnboarding = async (userData) => {
     try {
       setLoading(true);
@@ -156,6 +168,16 @@ const App = () => {
       
       if (error) {
         console.error('Signup error:', error);
+        
+        // Handle setup-related errors
+        if (error.message && error.message.includes('SETUP_REQUIRED')) {
+          return { 
+            success: false, 
+            error: error.message.replace('SETUP_REQUIRED: ', 'Database setup required: '),
+            isSetupError: true
+          };
+        }
+        
         throw error;
       }
 
@@ -190,7 +212,8 @@ const App = () => {
       console.error('Onboarding failed:', error);
       return { 
         success: false, 
-        error: error.message || 'Registration failed. Please try again.' 
+        error: error.message || 'Registration failed. Please try again.',
+        isSetupError: error.message && error.message.includes('SETUP_REQUIRED')
       };
     } finally {
       setLoading(false);

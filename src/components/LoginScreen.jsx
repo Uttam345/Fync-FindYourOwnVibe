@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Music, Heart, Sparkles, Users, Mail, RefreshCw } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Music, Heart, Sparkles, Users, Mail, RefreshCw, AlertTriangle, Database, ExternalLink } from 'lucide-react';
 
 // Welcome Screen / Login Component
 const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendConfirmation }) => {
@@ -10,6 +10,7 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
+  const [showSetupGuide, setShowSetupGuide] = useState(false);
   const [validationErrors, setValidationErrors] = useState({
     email: '',
     password: ''
@@ -19,6 +20,7 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
     e.preventDefault();
     setError('');
     setResendMessage('');
+    setShowSetupGuide(false);
     
     // Validate email and password
     const emailError = validateEmail(email);
@@ -36,7 +38,15 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
     const result = await onLogin(email, password);
     
     if (!result.success) {
-      setError(result.error || 'Login failed. Please try again.');
+      const errorMessage = result.error || 'Login failed. Please try again.';
+      
+      // Check if this is a setup-related error
+      if (errorMessage.includes('SETUP_REQUIRED')) {
+        setShowSetupGuide(true);
+        setError(errorMessage.replace('SETUP_REQUIRED: ', ''));
+      } else {
+        setError(errorMessage);
+      }
     }
     setLoading(false);
   };
@@ -185,6 +195,38 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
           </div>
         </motion.div>
 
+        {/* Database Setup Guide */}
+        <AnimatePresence>
+          {showSetupGuide && (
+            <motion.div 
+              className="bg-amber-500/20 border border-amber-400/30 text-amber-100 p-4 rounded-xl mb-4 backdrop-blur-sm"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <div className="flex items-center space-x-2 mb-3">
+                <AlertTriangle className="w-5 h-5" />
+                <span className="font-medium">Database Setup Required</span>
+              </div>
+              <p className="text-sm mb-3">
+                The FYNC database needs to be configured before you can log in. Please follow these steps:
+              </p>
+              <ol className="text-sm space-y-1 list-decimal list-inside mb-3">
+                <li>Go to your <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-amber-200 hover:underline inline-flex items-center">
+                  Supabase Dashboard <ExternalLink className="w-3 h-3 ml-1" />
+                </a></li>
+                <li>Select your FYNC project</li>
+                <li>Navigate to SQL Editor</li>
+                <li>Copy and paste the contents from <code className="bg-amber-600/30 px-1 rounded">complete-database-setup.sql</code></li>
+                <li>Click "Run" to execute the setup</li>
+              </ol>
+              <p className="text-xs text-amber-200">
+                After setup, you can create a new account using the "Sign Up" button below.
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Email confirmation pending message */}
         {emailConfirmationPending && (
           <motion.div 
@@ -221,7 +263,7 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
           </motion.div>
         )}
         
-        {error && (
+        {error && !showSetupGuide && (
           <motion.div 
             className="bg-red-500/20 border border-red-400/30 text-red-100 p-3 rounded-xl mb-4 backdrop-blur-sm"
             initial={{ opacity: 0, x: -20 }}
