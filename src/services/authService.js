@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase'
 import { ImageUploadService } from './imageUploadService'
 
 export class AuthService {  
-  // Check if the system is properly set up before attempting operations
+  // Enhanced system setup check with more thorough verification
   static async checkSystemSetup() {
     try {
       console.log('🔍 Checking system setup...');
@@ -42,6 +42,19 @@ export class AuthService {
       if (bucketError || !hasBucket) {
         console.warn('⚠️ Storage bucket not found, but continuing...');
       }
+
+      // Additional test: Try to perform a basic auth operation to verify auth is working
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        console.log('✅ Auth service is responsive');
+      } catch (authError) {
+        console.error('❌ Auth service issue:', authError);
+        return {
+          isSetup: false,
+          error: 'AUTH_SERVICE_ERROR', 
+          message: 'Authentication service is not properly configured. Please check your Supabase configuration.'
+        };
+      }
       
       console.log('✅ System setup verified');
       return { isSetup: true, error: null };
@@ -50,12 +63,12 @@ export class AuthService {
       return { 
         isSetup: false, 
         error: 'SETUP_CHECK_FAILED',
-        message: 'Unable to verify system setup. Please check your Subabase connection.' 
+        message: 'Unable to verify system setup. Please check your Supabase connection and run the database setup script.' 
       };
     }
   }
 
-  // Sign in existing user with setup verification
+  // Enhanced sign in with better error handling and setup verification
   static async signIn(email, password) {
     try {
       console.log('🔄 Signing in user:', email);
@@ -74,10 +87,31 @@ export class AuthService {
       if (error) {
         console.error('❌ SignIn error:', error);
         
-        // Provide specific error messages based on error type
+        // Enhanced error handling with specific guidance
         if (error.message === 'Invalid login credentials') {
+          // Check if any users exist in the system to provide better guidance
+          try {
+            const { data: profilesCount } = await supabase
+              .from('profiles')
+              .select('count', { count: 'exact', head: true });
+              
+            if (profilesCount && profilesCount.length === 0) {
+              // No users exist, likely needs database setup
+              throw new Error(
+                'SETUP_REQUIRED: No user accounts found in the system. This suggests the database setup may be incomplete. Please run the complete database setup script and then create your first account using the "Sign Up" button.'
+              );
+            }
+          } catch (countError) {
+            // If we can't check user count, might be a setup issue
+            if (countError.code === '42P01' || countError.code === '42501') {
+              throw new Error(
+                'SETUP_REQUIRED: Database tables are not properly configured. Please run the complete database setup script in your Supabase dashboard before attempting to log in.'
+              );
+            }
+          }
+          
           throw new Error(
-            'Invalid login credentials. This could mean: 1) The email/password is incorrect, 2) The user account doesn\'t exist (please sign up first), or 3) The email hasn\'t been confirmed yet (check your email for a confirmation link).'
+            'Invalid login credentials. This could mean: 1) The email/password combination is incorrect, 2) No account exists with this email address (please sign up first), or 3) Your email address hasn\'t been confirmed yet (check your email for a confirmation link).'
           );
         } else if (error.message.includes('Email not confirmed')) {
           throw new Error(

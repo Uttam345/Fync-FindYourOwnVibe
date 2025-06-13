@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Music, Heart, Sparkles, Users, Mail, RefreshCw, AlertTriangle, Database, ExternalLink } from 'lucide-react';
+import { Music, Heart, Sparkles, Users, Mail, RefreshCw, AlertTriangle, Database, ExternalLink, UserPlus } from 'lucide-react';
 
 // Welcome Screen / Login Component
 const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendConfirmation }) => {
@@ -11,6 +11,7 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
   const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [showSignupSuggestion, setShowSignupSuggestion] = useState(false);
   const [validationErrors, setValidationErrors] = useState({
     email: '',
     password: ''
@@ -21,6 +22,7 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
     setError('');
     setResendMessage('');
     setShowSetupGuide(false);
+    setShowSignupSuggestion(false);
     
     // Validate email and password
     const emailError = validateEmail(email);
@@ -44,6 +46,11 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
       if (errorMessage.includes('SETUP_REQUIRED')) {
         setShowSetupGuide(true);
         setError(errorMessage.replace('SETUP_REQUIRED: ', ''));
+      } else if (errorMessage.includes('Invalid login credentials') || 
+                 errorMessage.includes('No account exists with this email')) {
+        // Show signup suggestion for credential errors
+        setShowSignupSuggestion(true);
+        setError(errorMessage);
       } else {
         setError(errorMessage);
       }
@@ -227,6 +234,32 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
           )}
         </AnimatePresence>
 
+        {/* Signup Suggestion */}
+        <AnimatePresence>
+          {showSignupSuggestion && !showSetupGuide && (
+            <motion.div 
+              className="bg-blue-500/20 border border-blue-400/30 text-blue-100 p-4 rounded-xl mb-4 backdrop-blur-sm"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+            >
+              <div className="flex items-center space-x-2 mb-2">
+                <UserPlus className="w-5 h-5" />
+                <span className="font-medium">Need an Account?</span>
+              </div>
+              <p className="text-sm mb-3">
+                If you don't have an account yet, you'll need to create one first.
+              </p>
+              <button
+                onClick={handleSignUpClick}
+                className="bg-blue-500/30 hover:bg-blue-500/50 text-blue-100 px-4 py-2 rounded-lg text-sm transition-colors"
+              >
+                Create New Account
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Email confirmation pending message */}
         {emailConfirmationPending && (
           <motion.div 
@@ -263,7 +296,7 @@ const LoginScreen = ({ onLogin, onNavigate, emailConfirmationPending, onResendCo
           </motion.div>
         )}
         
-        {error && !showSetupGuide && (
+        {error && !showSetupGuide && !showSignupSuggestion && (
           <motion.div 
             className="bg-red-500/20 border border-red-400/30 text-red-100 p-3 rounded-xl mb-4 backdrop-blur-sm"
             initial={{ opacity: 0, x: -20 }}
