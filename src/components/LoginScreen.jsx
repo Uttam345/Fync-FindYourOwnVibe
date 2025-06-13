@@ -58,8 +58,8 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
     if (!password) {
       return 'Password is required';
     }
-    if (password.length !== 8) {
-      return 'Password must be exactly 8 characters long';
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters long';
     }
     return '';
   };
@@ -203,13 +203,12 @@ const LoginScreen = ({ onLogin, onNavigate }) => {
                   ? 'border-red-400 focus:ring-red-400' 
                   : 'border-white/20 focus:ring-purple-400'
               }`}
-              placeholder="Must be exactly 8 characters"
-              maxLength={8}
+              placeholder="At least 8 characters"
             />
             {validationErrors.password && (
               <p className="mt-1 text-red-300 text-sm">{validationErrors.password}</p>
             )}
-            <p className="mt-1 text-white/60 text-xs">Password must be exactly 8 characters long</p>
+            <p className="mt-1 text-white/60 text-xs">Password must be at least 8 characters long</p>
           </div>            <motion.button 
             type="submit"
             disabled={loading || !isFormValid()}
