@@ -7,63 +7,109 @@ export class AuthService {
     try {
       console.log('🔍 Checking system setup...');
       
+      // First, test basic Supabase connection
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('✅ Supabase connection established');
+      } catch (connectionError) {
+        console.error('❌ Supabase connection failed:', connectionError);
+        return {
+          isSetup: false,
+          error: 'CONNECTION_ERROR',
+          message: 'Unable to connect to Supabase. Please check your configuration and internet connection.'
+        };
+      }
+      
       // Test if profiles table exists and is accessible
-      const { data, error } = await supabase
+      const { data, error: profilesError } = await supabase
         .from('profiles')
         .select('count', { count: 'exact', head: true });
       
-      if (error) {
-        console.error('❌ Database setup issue:', error);
-        if (error.code === '42P01') {
+      if (profilesError) {
+        console.error('❌ Database setup issue:', profilesError);
+        if (profilesError.code === '42P01') {
           return { 
             isSetup: false, 
             error: 'DATABASE_NOT_SETUP',
-            message: 'Database tables are not set up. Please run the database setup script in your Supabase dashboard.' 
+            message: 'The profiles table does not exist. Please run the complete-database-setup.sql script in your Supabase SQL Editor to set up the database.' 
           };
         }
-        if (error.code === '42501') {
+        if (profilesError.code === '42501') {
           return { 
             isSetup: false, 
             error: 'RLS_NOT_CONFIGURED',
-            message: 'Database permissions are not configured. Please run the complete database setup script.' 
+            message: 'Database Row Level Security policies are not configured. Please run the complete-database-setup.sql script in your Supabase SQL Editor.' 
           };
         }
         return { 
           isSetup: false, 
           error: 'DATABASE_ERROR',
-          message: `Database configuration error: ${error.message}` 
+          message: `Database configuration error (${profilesError.code}): ${profilesError.message}. Please run the complete database setup script.` 
         };
       }
       
-      // Test storage bucket
-      const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
-      const hasBucket = buckets?.find(b => b.id === 'profile-pictures');
-      
-      if (bucketError || !hasBucket) {
-        console.warn('⚠️ Storage bucket not found, but continuing...');
-      }
-
-      // Additional test: Try to perform a basic auth operation to verify auth is working
+      // Test storage bucket exists
       try {
-        const { data: session } = await supabase.auth.getSession();
-        console.log('✅ Auth service is responsive');
-      } catch (authError) {
-        console.error('❌ Auth service issue:', authError);
+        const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
+        
+        if (bucketError) {
+          console.error('❌ Storage service error:', bucketError);
+          return {
+            isSetup: false,
+            error: 'STORAGE_ERROR',
+            message: 'Storage service is not accessible. Please run the complete database setup script to configure storage buckets.'
+          };
+        }
+        
+        const hasBucket = buckets?.find(b => b.id === 'profile-pictures');
+        if (!hasBucket) {
+          console.warn('⚠️ Profile pictures bucket missing');
+          return {
+            isSetup: false,
+            error: 'STORAGE_BUCKET_MISSING',
+            message: 'The profile-pictures storage bucket is missing. Please run the complete-database-setup.sql script to create storage buckets.'
+          };
+        }
+      } catch (storageError) {
+        console.error('❌ Storage check failed:', storageError);
         return {
           isSetup: false,
-          error: 'AUTH_SERVICE_ERROR', 
-          message: 'Authentication service is not properly configured. Please check your Supabase configuration.'
+          error: 'STORAGE_CHECK_FAILED',
+          message: 'Unable to verify storage configuration. Please run the complete database setup script.'
         };
       }
       
-      console.log('✅ System setup verified');
+      // Test if we can query profiles table (RLS policies working)
+      try {
+        const { data: testProfiles, error: testError } = await supabase
+          .from('profiles')
+          .select('id')
+          .limit(1);
+        
+        if (testError && testError.code === '42501') {
+          return {
+            isSetup: false,
+            error: 'RLS_POLICIES_MISSING',
+            message: 'Row Level Security policies are not properly configured. Please run the complete-database-setup.sql script.'
+          };
+        }
+      } catch (rlsError) {
+        console.error('❌ RLS test failed:', rlsError);
+        return {
+          isSetup: false,
+          error: 'RLS_TEST_FAILED',
+          message: 'Unable to test database permissions. Please run the complete database setup script.'
+        };
+      }
+      
+      console.log('✅ System setup verified successfully');
       return { isSetup: true, error: null };
     } catch (error) {
       console.error('❌ System setup check failed:', error);
       return { 
         isSetup: false, 
         error: 'SETUP_CHECK_FAILED',
-        message: 'Unable to verify system setup. Please check your Supabase connection and run the database setup script.' 
+        message: 'Unable to verify system setup. Please ensure your Supabase connection is working and run the complete-database-setup.sql script in your Supabase SQL Editor.' 
       };
     }
   }
@@ -76,6 +122,7 @@ export class AuthService {
       // First check if system is properly set up
       const setupCheck = await this.checkSystemSetup();
       if (!setupCheck.isSetup) {
+        console.error('❌ System not properly set up:', setupCheck.error);
         throw new Error(`SETUP_REQUIRED: ${setupCheck.message}`);
       }
       
@@ -88,37 +135,60 @@ export class AuthService {
         console.error('❌ SignIn error:', error);
         
         // Enhanced error handling with specific guidance
-        if (error.message === 'Invalid login credentials') {
-          // Check if any users exist in the system to provide better guidance
+        if (error.message === 'Invalid login credentials' || error.message.includes('Invalid login credentials')) {
+          // Additional check: see if there are any users in the system at all
           try {
+            console.log('🔍 Checking if any users exist in the system...');
+            
+            // First check if we can access the profiles table
             const { data: existingProfiles, error: profileError } = await supabase
               .from('profiles')
               .select('id')
               .limit(1);
               
             if (profileError) {
-              // If we can't check profiles, might be a setup issue
-              if (profileError.code === '42P01' || profileError.code === '42501') {
+              console.error('❌ Cannot check existing profiles:', profileError);
+              // If we can't check profiles, this is likely a setup issue
+              if (profileError.code === '42P01') {
                 throw new Error(
-                  'SETUP_REQUIRED: Database tables are not properly configured. Please run the complete database setup script in your Supabase dashboard before attempting to log in.'
+                  'SETUP_REQUIRED: The profiles table does not exist. Please run the complete-database-setup.sql script in your Supabase SQL Editor before attempting to log in.'
+                );
+              } else if (profileError.code === '42501') {
+                throw new Error(
+                  'SETUP_REQUIRED: Database permissions are not configured. Please run the complete-database-setup.sql script in your Supabase SQL Editor.'
+                );
+              } else {
+                throw new Error(
+                  'SETUP_REQUIRED: Cannot access user profiles. This suggests the database setup is incomplete. Please run the complete-database-setup.sql script in your Supabase SQL Editor.'
                 );
               }
-            } else if (!existingProfiles || existingProfiles.length === 0) {
-              // No users exist, likely needs database setup or first account creation
+            }
+            
+            // Check if there are any users at all
+            if (!existingProfiles || existingProfiles.length === 0) {
+              console.log('ℹ️ No users found in the system');
               throw new Error(
-                'SETUP_REQUIRED: No user accounts found in the system. This suggests the database setup may be incomplete. Please run the complete database setup script and then create your first account using the "Sign Up" button.'
+                'SETUP_REQUIRED: No user accounts found in the system. Please run the complete-database-setup.sql script in your Supabase SQL Editor, then create your first account using the "Sign Up" button.'
               );
             }
+            
+            console.log(`ℹ️ Found ${existingProfiles.length} user(s) in the system`);
+            
           } catch (countError) {
             // If the countError is already a SETUP_REQUIRED error, re-throw it
             if (countError.message.includes('SETUP_REQUIRED')) {
               throw countError;
             }
-            // Otherwise, continue with the original invalid credentials message
+            // Otherwise, it's likely a different kind of error
+            console.error('❌ Error checking user count:', countError);
+            throw new Error(
+              'SETUP_REQUIRED: Cannot verify user accounts. This suggests the database setup may be incomplete. Please run the complete-database-setup.sql script in your Supabase SQL Editor.'
+            );
           }
           
+          // If we get here, there are users in the system, so it's likely just wrong credentials
           throw new Error(
-            'Invalid login credentials. This could mean: 1) The email/password combination is incorrect, 2) No account exists with this email address (please sign up first), or 3) Your email address hasn\'t been confirmed yet (check your email for a confirmation link).'
+            'Invalid login credentials. Please check your email and password. If you don\'t have an account yet, please use the "Sign Up" button to create one.'
           );
         } else if (error.message.includes('Email not confirmed')) {
           throw new Error(
@@ -162,6 +232,7 @@ export class AuthService {
       // Check system setup before attempting signup
       const setupCheck = await this.checkSystemSetup();
       if (!setupCheck.isSetup) {
+        console.error('❌ System not properly set up for signup:', setupCheck.error);
         throw new Error(`SETUP_REQUIRED: ${setupCheck.message}`);
       }
       
@@ -183,7 +254,13 @@ export class AuthService {
       })
 
       if (error) {
-        console.error('Auth signup error:', error);
+        console.error('❌ Auth signup error:', error);
+        
+        // Check for specific signup errors that might indicate setup issues
+        if (error.message?.includes('Database error')) {
+          throw new Error('SETUP_REQUIRED: Database error during signup. Please ensure the complete-database-setup.sql script has been executed in your Supabase SQL Editor.');
+        }
+        
         throw error;
       }
 
@@ -268,7 +345,9 @@ export class AuthService {
         
         // Provide specific error messages
         if (profileError.code === '42501') {
-          throw new Error('Database permission error. Please ensure you have run the latest database migration.');
+          throw new Error('SETUP_REQUIRED: Database permission error. Please ensure you have run the complete-database-setup.sql script in your Supabase SQL Editor.');
+        } else if (profileError.code === '42P01') {
+          throw new Error('SETUP_REQUIRED: The profiles table does not exist. Please run the complete-database-setup.sql script in your Supabase SQL Editor.');
         } else if (profileError.code === '23505') {
           if (profileError.message.includes('username')) {
             throw new Error('This username is already taken. Please choose a different one.');
