@@ -91,23 +91,30 @@ export class AuthService {
         if (error.message === 'Invalid login credentials') {
           // Check if any users exist in the system to provide better guidance
           try {
-            const { data: profilesCount } = await supabase
+            const { data: existingProfiles, error: profileError } = await supabase
               .from('profiles')
-              .select('count', { count: 'exact', head: true });
+              .select('id')
+              .limit(1);
               
-            if (profilesCount && profilesCount.length === 0) {
-              // No users exist, likely needs database setup
+            if (profileError) {
+              // If we can't check profiles, might be a setup issue
+              if (profileError.code === '42P01' || profileError.code === '42501') {
+                throw new Error(
+                  'SETUP_REQUIRED: Database tables are not properly configured. Please run the complete database setup script in your Supabase dashboard before attempting to log in.'
+                );
+              }
+            } else if (!existingProfiles || existingProfiles.length === 0) {
+              // No users exist, likely needs database setup or first account creation
               throw new Error(
                 'SETUP_REQUIRED: No user accounts found in the system. This suggests the database setup may be incomplete. Please run the complete database setup script and then create your first account using the "Sign Up" button.'
               );
             }
           } catch (countError) {
-            // If we can't check user count, might be a setup issue
-            if (countError.code === '42P01' || countError.code === '42501') {
-              throw new Error(
-                'SETUP_REQUIRED: Database tables are not properly configured. Please run the complete database setup script in your Supabase dashboard before attempting to log in.'
-              );
+            // If the countError is already a SETUP_REQUIRED error, re-throw it
+            if (countError.message.includes('SETUP_REQUIRED')) {
+              throw countError;
             }
+            // Otherwise, continue with the original invalid credentials message
           }
           
           throw new Error(
